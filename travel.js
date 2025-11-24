@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         YWOT Canvas Navigator
 // @namespace    http://tampermonkey.net/
-// @version      5.0
-// @description  Navigate using keyboard with stop command
+// @version      6.0
+// @description  Navigate using directions with stop command
 // @author       You
 // @match        *://www.yourworldoftext.com/*
 // @match        *://yourworldoftext.com/*
@@ -17,7 +17,7 @@
 
     // Global flag to stop navigation
     let shouldStop = false;
-    let activeTimeouts = [];
+    let navigationInterval = null;
 
     // Find the main container
     function getContainer() {
@@ -26,71 +26,119 @@
                document.querySelector('body > div');
     }
 
-    // Keyboard-based navigation
-    window.navigateTo = function(x, y) {
-        // Reset stop flag and clear previous timeouts
-        shouldStop = false;
-        activeTimeouts.forEach(timeout => clearTimeout(timeout));
-        activeTimeouts = [];
+    // Press a key
+    function pressKey(container, key) {
+        container.dispatchEvent(new KeyboardEvent('keydown', {
+            key,
+            code: key === 'ArrowRight' ? 'ArrowRight' : key === 'ArrowLeft' ? 'ArrowLeft' :
+                  key === 'ArrowDown' ? 'ArrowDown' : 'ArrowUp',
+            bubbles: true
+        }));
+    }
 
-        console.log(`[KEYBOARD] Navigating to (${x}, ${y}) using keyboard events`);
+    // Navigate in a direction continuously
+    window.go = function(direction) {
+        // Stop any existing navigation
+        if (navigationInterval) {
+            clearInterval(navigationInterval);
+        }
+
+        shouldStop = false;
+        direction = direction.toLowerCase();
+
+        console.log(`[GO] Starting continuous navigation: ${direction}`);
 
         const container = getContainer();
         if (!container) {
-            console.error('[KEYBOARD] Container not found');
+            console.error('[GO] Container not found');
             return false;
         }
 
         container.focus();
 
-        // Calculate direction and distance
-        const stepsX = Math.abs(x);
-        const stepsY = Math.abs(y);
-        const rightKey = x > 0;
-        const downKey = y > 0;
+        // Determine which keys to press based on direction
+        let keys = [];
+        switch(direction) {
+            case 'north':
+            case 'n':
+            case 'up':
+                keys = ['ArrowUp'];
+                break;
+            case 'south':
+            case 's':
+            case 'down':
+                keys = ['ArrowDown'];
+                break;
+            case 'east':
+            case 'e':
+            case 'right':
+                keys = ['ArrowRight'];
+                break;
+            case 'west':
+            case 'w':
+            case 'left':
+                keys = ['ArrowLeft'];
+                break;
+            case 'northeast':
+            case 'ne':
+                keys = ['ArrowUp', 'ArrowRight'];
+                break;
+            case 'northwest':
+            case 'nw':
+                keys = ['ArrowUp', 'ArrowLeft'];
+                break;
+            case 'southeast':
+            case 'se':
+                keys = ['ArrowDown', 'ArrowRight'];
+                break;
+            case 'southwest':
+            case 'sw':
+                keys = ['ArrowDown', 'ArrowLeft'];
+                break;
+            default:
+                console.error(`[GO] Unknown direction: ${direction}`);
+                console.log('[GO] Valid directions: north, south, east, west, northeast, northwest, southeast, southwest');
+                console.log('[GO] Or use: n, s, e, w, ne, nw, se, sw');
+                return false;
+        }
 
-        // Simulate arrow key presses
-        const pressKey = (key, times) => {
-            for (let i = 0; i < times; i++) {
-                const timeout = setTimeout(() => {
-                    if (shouldStop) {
-                        console.log('[KEYBOARD] Stopped by user');
-                        return;
-                    }
-
-                    container.dispatchEvent(new KeyboardEvent('keydown', {
-                        key,
-                        code: key === 'ArrowRight' ? 'ArrowRight' : key === 'ArrowLeft' ? 'ArrowLeft' :
-                              key === 'ArrowDown' ? 'ArrowDown' : 'ArrowUp',
-                        bubbles: true
-                    }));
-                }, i * 10);
-
-                activeTimeouts.push(timeout);
+        // Press keys continuously
+        navigationInterval = setInterval(() => {
+            if (shouldStop) {
+                clearInterval(navigationInterval);
+                navigationInterval = null;
+                console.log('[GO] Navigation stopped');
+                return;
             }
-        };
 
-        pressKey(rightKey ? 'ArrowRight' : 'ArrowLeft', stepsX);
-        pressKey(downKey ? 'ArrowDown' : 'ArrowUp', stepsY);
+            keys.forEach(key => pressKey(container, key));
+        }, 10); // Press keys every 10ms
 
-        console.log('[KEYBOARD] Keys queued');
+        console.log(`[GO] Navigating ${direction}... Type stop() to stop`);
     };
 
     // Stop command
     window.stop = function() {
         shouldStop = true;
-        activeTimeouts.forEach(timeout => clearTimeout(timeout));
-        activeTimeouts = [];
-        console.log('%c[STOP] Stopping navigation...', 'color: #f00; font-weight: bold');
+        if (navigationInterval) {
+            clearInterval(navigationInterval);
+            navigationInterval = null;
+        }
+        console.log('%c[STOP] Navigation stopped!', 'color: #f00; font-weight: bold');
     };
 
     console.log('%c=== FUNCTIONS READY ===', 'background: #00f; color: #fff; font-weight: bold; padding: 10px');
     console.log('%cAvailable commands:', 'color: #0ff; font-weight: bold; font-size: 14px');
-    console.log('  navigateTo(x, y)  - Navigate using keyboard');
-    console.log('  stop()            - Stop current navigation');
+    console.log('  go(direction)  - Navigate continuously in a direction');
+    console.log('  stop()         - Stop navigation');
     console.log('');
-    console.log('%cExample:', 'color: #ff0');
-    console.log('  navigateTo(100, 100)  - Navigate to (100, 100)');
-    console.log('  stop()                - Stop moving');
+    console.log('%cDirections:', 'color: #0ff; font-weight: bold');
+    console.log('  Cardinal: north, south, east, west (or n, s, e, w)');
+    console.log('  Diagonal: northeast, northwest, southeast, southwest (or ne, nw, se, sw)');
+    console.log('');
+    console.log('%cExamples:', 'color: #ff0');
+    console.log('  go("north")     - Go north continuously');
+    console.log('  go("ne")        - Go northeast continuously');
+    console.log('  stop()          - Stop moving');
 
 })();
